@@ -14,3 +14,4 @@ name = "d01p1"
 path = "src/bin/d01p1.rs"
 
 [dependencies]
+regex = "1.5"
