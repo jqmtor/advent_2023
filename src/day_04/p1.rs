@@ -1,4 +1,6 @@
+use regex::Regex;
 use std::collections::HashSet;
+use std::io::{BufRead, Write};
 
 /*
 --- Day 4: Scratchcards ---
@@ -62,14 +64,67 @@ Take a seat in the large pile of colorful cards. How many points are they worth
 in total?
 */
 
-
-pub struct Card {
+#[derive(Debug, PartialEq)]
+pub struct ScratchCard {
     numbers: Vec<u32>,
     winning_numbers: HashSet<u32>,
 }
 
-pub fn count_winning(card: Card) -> usize {
+fn count_winning(card: &ScratchCard) -> usize {
     card.numbers.iter().filter(|n| card.winning_numbers.contains(n)).count()
+}
+
+fn parse_card(card: &str) -> ScratchCard {
+    let mut header_split = card.split(':');
+    // discard card header
+    header_split.next().expect("Card header to be present");
+    let card_contents = header_split.next().expect("Card contents to be present");
+    let mut contents_split = card_contents.split('|');
+    let winning_numbers = contents_split.next().expect("Winning numbers to be present");
+    let numbers = contents_split.next().expect("Card numbers to be present");
+
+    let regex = Regex::new(r"\d+",).unwrap();
+    let winning_numbers: Vec<u32> = regex
+        .find_iter(winning_numbers)
+        .map(|n| {
+            n.as_str().parse::<u32>().expect("Number to be parseable")
+        }).collect();
+
+    let numbers = regex
+        .find_iter(numbers)
+        .map(|n| {
+            n.as_str().parse::<u32>().expect("Number to be parseable")
+        }).collect();
+
+    ScratchCard { numbers, winning_numbers: HashSet::from_iter(winning_numbers) }
+}
+
+fn parse_input<R>(reader: R) -> Vec<ScratchCard> where R: BufRead {
+    reader.lines().map(|l| {
+        let l = l.expect("Line to be present");
+        parse_card(&l)
+    }).collect()
+}
+
+pub fn solve<R, W>(reader: R, mut writer: W) where R: BufRead, W: Write {
+    let solution: u32 = parse_input(reader)
+        .iter()
+        .map(|c| {
+            u32::try_from(count_winning(c))
+                .expect("Number to be conversible.")
+        })
+        .map(|count| {
+            // since the count starts at one, and always doubles after that,
+            // it's the same as computing 2^count-1, with count = 0 being the
+            // exception
+            if count == 0 {
+                count
+            } else {
+                2_u32.pow(count - 1)
+            }
+        }).sum();
+
+    write!(&mut writer, "The pile of the Elf's scratchcards is worth: {}", solution).unwrap();
 }
 
 #[cfg(test)]
@@ -77,20 +132,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parse_card() { 
+        let line = "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53";
+        let expected = ScratchCard {
+            winning_numbers: [41, 48, 83, 86, 17].into(),
+            numbers: vec![83, 86, 6, 31, 17, 9, 48, 53]
+        };
+
+        assert_eq!(parse_card(line), expected);
+    }
+
+    #[test]
     fn test_count_winning_without_matches() {
-        let card = Card {
+        let card = ScratchCard {
             numbers: vec![1, 3, 5, 7, 9],
             winning_numbers: [2, 4, 6, 8].into()
         };
-        assert_eq!(count_winning(card), 0);
+        assert_eq!(count_winning(&card), 0);
     }
 
     #[test]
     fn test_count_winning_with_matches() {
-        let card = Card {
+        let card = ScratchCard {
             numbers: vec![1, 2, 5, 8, 9],
             winning_numbers: [2, 4, 6, 8].into()
         };
-        assert_eq!(count_winning(card), 2);
+        assert_eq!(count_winning(&card), 2);
     }
 }
